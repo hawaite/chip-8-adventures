@@ -8,7 +8,7 @@ $(MAIN): $(SRC_DIR)/main.c
 	$(CC) $(CFLAGS) $? -o $@
 
 run: $(MAIN)
-	$(MAIN)
+	$(MAIN) ./src/IBM_logo.ch8
 
 clean:
 	rm -rf $(BUILD_DIR)

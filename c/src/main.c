@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define FB_W 64
+#define FB_H 32
+
 typedef struct registers{
     uint16_t PC;
     uint16_t I;
@@ -20,12 +23,15 @@ uint16_t fetch(REGISTERS* registers, uint8_t* ram){
     return val;
 }
 
-void execute_0(uint16_t instruction, REGISTERS* registers, uint8_t* ram){
+void execute_0(uint16_t instruction, REGISTERS* registers, uint8_t* ram, uint8_t* framebuffer){
     switch(instruction){
         case 0x00E0:
+            printf("CLEAR SCREEN\n");
             // Clear screen
+            memset(framebuffer, 0, FB_H * FB_W);
             break;
         case 0x00EE:
+            printf("RET\n");
             // return from subrouting
             break;
     }
@@ -33,6 +39,7 @@ void execute_0(uint16_t instruction, REGISTERS* registers, uint8_t* ram){
 
 void execute_1(uint16_t nnn, REGISTERS* registers){
     // JUMP - set PC to nnn
+    printf("JUMP : %03X\n", nnn);
     registers->PC = nnn;
 }
 
@@ -50,11 +57,13 @@ void execute_5(uint8_t x, uint8_t y, REGISTERS* registers){
 
 void execute_6(uint8_t x, uint8_t kk, REGISTERS* registers){
     // SET register x to kk
+    printf("SET v[%01X]: %02X\n", x, kk);
     registers->v[x] = kk;
 }
 
 void execute_7(uint8_t x, uint8_t kk, REGISTERS* registers){
     // ADD kk to current value of v[x]
+    printf("ADD v[%01X]: %02X\n", x, kk);
     registers->v[x] = registers->v[x] + kk;
 }
 
@@ -66,6 +75,7 @@ void execute_9(uint8_t x, uint8_t y, REGISTERS* registers){
 
 void execute_a(uint16_t nnn, REGISTERS* registers){
     // SET I to nnn
+    printf("SET I: %03X\n", nnn);
     registers->I = nnn;
 }
 
@@ -76,6 +86,7 @@ void execute_c(uint8_t x, uint8_t kk, REGISTERS* registers){
 }
 
 void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* ram){
+    printf("DISPLAY: %01X %01X %01X\n", x, y, n);
 }
 
 void execute_e(uint8_t x, REGISTERS* registers){
@@ -84,7 +95,7 @@ void execute_e(uint8_t x, REGISTERS* registers){
 void execute_f(uint8_t x, REGISTERS* registers, uint8_t* ram){
 }
 
-void decode_and_execute(uint16_t instruction, REGISTERS* registers, uint8_t* ram){
+void decode_and_execute(uint16_t instruction, REGISTERS* registers, uint8_t* ram, uint8_t* framebuffer){
     uint8_t top_nibble = instruction >> 12;
     uint16_t nnn = instruction & 0x0FFF;
     uint8_t kk = instruction & 0x00FF;
@@ -92,10 +103,10 @@ void decode_and_execute(uint16_t instruction, REGISTERS* registers, uint8_t* ram
     uint8_t y = (instruction & 0x00F0) >> 4;
     uint8_t n = (instruction & 0x000F);
 
-    printf("top nibble : %02X\n", top_nibble);
+    // printf("instruction : %04X\n", instruction);
     switch(top_nibble){
         case 0x0: // 00E0 00EE (0nnn unused)
-            execute_0(instruction, registers, ram);
+            execute_0(instruction, registers, ram, framebuffer);
             break;
         case 0x1: // 1nnn
             execute_1(nnn, registers);
@@ -152,28 +163,64 @@ void init_registers(REGISTERS* registers){
     registers->SP = 0;
 }
 
+void load_program_from_file(char* path, uint8_t* ram){
+    printf("starting load\n");
+    FILE* fp = fopen(path, "r");
+    if(fp == NULL){
+        printf("could not open file.\n");
+        exit(-1);
+    }
+
+    int program_base = 0x200;
+    int i = 0;
+
+    while(feof(fp) == 0){
+        ram[program_base + i] = fgetc(fp);
+        i++;
+    }
+
+    printf("Read %d bytes of program\n", i-1);
+    fclose(fp);
+}
+
 // Implement 00E0, 1NNN, 6XNN, 7XNN, ANNN, DXYN for IBM logo test
 int main(int argc, char* argv[]){
     REGISTERS registers;
     uint8_t ram[4096] = { 0 };
 
+    // 64 x 32 framebuffer
+    uint8_t framebuffer[FB_W * FB_H] = { 0 };
+
     init_registers(&registers);
 
-    //put test value in RAM
-    ram[0x1F1] = 0xBE;
-    ram[0x1F2] = 0xEF;
+    load_program_from_file(argv[1], ram);
 
-    registers.PC = 0X01F1;
-    printf("PC Before : %04X\n", registers.PC);
+    //starting address
+    registers.PC = 0x200;
 
-    uint16_t fetched = fetch(&registers, ram);
-    printf("fetched : %04X\n", fetched);
-    printf("PC After : %04X\n", registers.PC);
+    int cycles = 1; // cap the number of cycles to execute for now
 
-    decode_and_execute(0xFABE, &registers, ram);
+    while(cycles > 0){
+        uint16_t instruction = fetch(&registers, ram);
+        decode_and_execute(instruction, &registers, ram, framebuffer);
+        cycles--;
+    }
 
-    printf("v[2] before : %02X\n", registers.v[0x02]);
-    execute_7(0x02, 0x22, &registers);
-    printf("v[2] after : %02X\n", registers.v[0x02]);
+    // //put test value in RAM
+    // ram[0x1F1] = 0xBE;
+    // ram[0x1F2] = 0xEF;
+
+    // registers.PC = 0X01F1;
+    // printf("PC Before : %04X\n", registers.PC);
+
+    // uint16_t fetched = fetch(&registers, ram);
+    // printf("fetched : %04X\n", fetched);
+    // printf("PC After : %04X\n", registers.PC);
+
+    // decode_and_execute(0xFABE, &registers, ram);
+
+    // printf("v[2] before : %02X\n", registers.v[0x02]);
+    // execute_7(0x02, 0x22, &registers);
+    // printf("v[2] after : %02X\n", registers.v[0x02]);
 
 }
