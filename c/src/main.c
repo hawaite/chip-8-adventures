@@ -75,7 +75,7 @@ void execute_b(uint16_t nnn, REGISTERS* registers, uint8_t* ram){
 void execute_c(uint8_t x, uint8_t kk, REGISTERS* registers){
 }
 
-void execute_d(uint8_t x, uint8_t y, REGISTERS* registers, uint8_t* ram){
+void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* ram){
 }
 
 void execute_e(uint8_t x, REGISTERS* registers){
@@ -90,6 +90,7 @@ void decode_and_execute(uint16_t instruction, REGISTERS* registers, uint8_t* ram
     uint8_t kk = instruction & 0x00FF;
     uint8_t x = (instruction & 0x0F00) >> 8;
     uint8_t y = (instruction & 0x00F0) >> 4;
+    uint8_t n = (instruction & 0x000F);
 
     printf("top nibble : %02X\n", top_nibble);
     switch(top_nibble){
@@ -133,7 +134,7 @@ void decode_and_execute(uint16_t instruction, REGISTERS* registers, uint8_t* ram
             execute_c(x, kk, registers);
             break;
         case 0xD: // Dxyn
-            execute_d(x, y, registers, ram);
+            execute_d(x, y, n, registers, ram);
             break;
         case 0xE: // Ex9E ExA1
             execute_e(x, registers);
