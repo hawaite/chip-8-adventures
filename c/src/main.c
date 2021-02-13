@@ -86,7 +86,36 @@ void execute_c(uint8_t x, uint8_t kk, REGISTERS* registers){
 }
 
 void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* ram){
-    printf("DISPLAY: %01X %01X %01X\n", x, y, n);
+    printf("DISPLAY: x = v[%01X] = 0x%02X = %d, y = v[%01X] = 0x%02X = %d, n = %01X\n", 
+        x, 
+        registers->v[x], 
+        registers->v[x], 
+        y, 
+        registers->v[y], 
+        registers->v[y], 
+        n);
+    uint8_t x_val = registers->v[x];
+    uint8_t y_val = registers->v[y];
+
+    // grab n bytes starting at address I
+    uint8_t sprite[n];
+    memcpy(sprite, (ram + registers->I), n); 
+
+    printf("%d byte sprite\n", n);
+
+    for(int i = 0; i < n; i++){
+        for(int j=7; j >= 0; j--){
+            if(((sprite[i] >> j) & 0x01) == 1){
+                printf("*");
+            }
+            else{
+                printf(" ");
+            }
+        }
+        printf("\n");
+        // printf("[%d] - 0x%02x\n", sprite[i]);
+    }
+
 }
 
 void execute_e(uint8_t x, REGISTERS* registers){
@@ -198,7 +227,7 @@ int main(int argc, char* argv[]){
     //starting address
     registers.PC = 0x200;
 
-    int cycles = 1; // cap the number of cycles to execute for now
+    int cycles = 50; // cap the number of cycles to execute for now
 
     while(cycles > 0){
         uint16_t instruction = fetch(&registers, ram);
