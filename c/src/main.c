@@ -13,6 +13,34 @@ typedef struct registers{
     uint8_t v[16];
 } REGISTERS;
 
+void blit_sprite(uint8_t* sprite, uint8_t sprite_rows, uint8_t x, uint8_t y, REGISTERS* registers, uint8_t* framebuffer){
+    // XOR, DON'T JUST SET!
+    uint8_t actual_x = x % FB_W;
+    uint8_t actual_y = y % FB_H;
+
+    //reset overwrite flag
+    registers->v[0xF] = 0;
+
+    for(int row = 0; row < sprite_rows; row++){
+        for(int pixel = 0; pixel < 8; pixel++){
+            // pixel 0 is most significant bit
+            if(actual_x + pixel >= FB_W)
+                break; // if we have hit the border, start next row
+            
+            //get pixel value
+            uint8_t pixel_value = (sprite[row] & (0x80 >> pixel)) >> (7-pixel);
+            uint8_t* fb_pixel_pointer = framebuffer + ( (actual_y + row) * FB_W ) + (actual_x + pixel);
+
+            // set flag if we are about to change a pixel value to be off
+            if(*fb_pixel_pointer == 0x01 && pixel_value == 0x01)
+                registers->v[0xF] = 1;
+
+            // XOR pixel in place
+            *fb_pixel_pointer = *fb_pixel_pointer ^ pixel_value;
+        }
+    }
+}
+
 // all instructions are 2 bytes so grab 2 bytes from RAM and bump PC by 2
 uint16_t fetch(REGISTERS* registers, uint8_t* ram){
     uint8_t first_byte = ram[registers->PC];
@@ -26,12 +54,12 @@ uint16_t fetch(REGISTERS* registers, uint8_t* ram){
 void execute_0(uint16_t instruction, REGISTERS* registers, uint8_t* ram, uint8_t* framebuffer){
     switch(instruction){
         case 0x00E0:
-            printf("CLEAR SCREEN\n");
+            //printf("CLEAR SCREEN\n");
             // Clear screen
             memset(framebuffer, 0, FB_H * FB_W);
             break;
         case 0x00EE:
-            printf("RET\n");
+            //printf("RET\n");
             // return from subrouting
             break;
     }
@@ -39,7 +67,7 @@ void execute_0(uint16_t instruction, REGISTERS* registers, uint8_t* ram, uint8_t
 
 void execute_1(uint16_t nnn, REGISTERS* registers){
     // JUMP - set PC to nnn
-    printf("JUMP : %03X\n", nnn);
+    // printf("JUMP : %03X\n", nnn);
     registers->PC = nnn;
 }
 
@@ -57,13 +85,13 @@ void execute_5(uint8_t x, uint8_t y, REGISTERS* registers){
 
 void execute_6(uint8_t x, uint8_t kk, REGISTERS* registers){
     // SET register x to kk
-    printf("SET v[%01X]: %02X\n", x, kk);
+    //printf("SET v[%01X]: %02X\n", x, kk);
     registers->v[x] = kk;
 }
 
 void execute_7(uint8_t x, uint8_t kk, REGISTERS* registers){
     // ADD kk to current value of v[x]
-    printf("ADD v[%01X]: %02X\n", x, kk);
+    //printf("ADD v[%01X]: %02X\n", x, kk);
     registers->v[x] = registers->v[x] + kk;
 }
 
@@ -75,7 +103,7 @@ void execute_9(uint8_t x, uint8_t y, REGISTERS* registers){
 
 void execute_a(uint16_t nnn, REGISTERS* registers){
     // SET I to nnn
-    printf("SET I: %03X\n", nnn);
+    //printf("SET I: %03X\n", nnn);
     registers->I = nnn;
 }
 
@@ -85,15 +113,15 @@ void execute_b(uint16_t nnn, REGISTERS* registers, uint8_t* ram){
 void execute_c(uint8_t x, uint8_t kk, REGISTERS* registers){
 }
 
-void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* ram){
-    printf("DISPLAY: x = v[%01X] = 0x%02X = %d, y = v[%01X] = 0x%02X = %d, n = %01X\n", 
-        x, 
-        registers->v[x], 
-        registers->v[x], 
-        y, 
-        registers->v[y], 
-        registers->v[y], 
-        n);
+void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* ram, uint8_t* framebuffer){
+    // printf("DISPLAY: x = v[%01X] = 0x%02X = %d, y = v[%01X] = 0x%02X = %d, n = %01X\n", 
+    //     x, 
+    //     registers->v[x], 
+    //     registers->v[x], 
+    //     y, 
+    //     registers->v[y], 
+    //     registers->v[y], 
+    //     n);
     uint8_t x_val = registers->v[x];
     uint8_t y_val = registers->v[y];
 
@@ -101,21 +129,20 @@ void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* r
     uint8_t sprite[n];
     memcpy(sprite, (ram + registers->I), n); 
 
-    printf("%d byte sprite\n", n);
+    blit_sprite(sprite, n, x_val, y_val, registers, framebuffer);
 
-    for(int i = 0; i < n; i++){
-        for(int j=7; j >= 0; j--){
-            if(((sprite[i] >> j) & 0x01) == 1){
-                printf("*");
+    // print the whole framebuffer
+    for(int fb_y = 0; fb_y < FB_H; fb_y++){
+        for(int fb_x=0; fb_x < FB_W; fb_x++){
+            if(*(framebuffer + (fb_y * FB_W) + fb_x) == 1){
+                printf("#");
             }
             else{
-                printf(" ");
+                printf("-");
             }
         }
         printf("\n");
-        // printf("[%d] - 0x%02x\n", sprite[i]);
     }
-
 }
 
 void execute_e(uint8_t x, REGISTERS* registers){
@@ -174,7 +201,7 @@ void decode_and_execute(uint16_t instruction, REGISTERS* registers, uint8_t* ram
             execute_c(x, kk, registers);
             break;
         case 0xD: // Dxyn
-            execute_d(x, y, n, registers, ram);
+            execute_d(x, y, n, registers, ram, framebuffer);
             break;
         case 0xE: // Ex9E ExA1
             execute_e(x, registers);
@@ -193,7 +220,7 @@ void init_registers(REGISTERS* registers){
 }
 
 void load_program_from_file(char* path, uint8_t* ram){
-    printf("starting load\n");
+    //printf("starting load\n");
     FILE* fp = fopen(path, "r");
     if(fp == NULL){
         printf("could not open file.\n");
@@ -208,7 +235,7 @@ void load_program_from_file(char* path, uint8_t* ram){
         i++;
     }
 
-    printf("Read %d bytes of program\n", i-1);
+    //printf("Read %d bytes of program\n", i-1);
     fclose(fp);
 }
 
@@ -234,22 +261,4 @@ int main(int argc, char* argv[]){
         decode_and_execute(instruction, &registers, ram, framebuffer);
         cycles--;
     }
-
-    // //put test value in RAM
-    // ram[0x1F1] = 0xBE;
-    // ram[0x1F2] = 0xEF;
-
-    // registers.PC = 0X01F1;
-    // printf("PC Before : %04X\n", registers.PC);
-
-    // uint16_t fetched = fetch(&registers, ram);
-    // printf("fetched : %04X\n", fetched);
-    // printf("PC After : %04X\n", registers.PC);
-
-    // decode_and_execute(0xFABE, &registers, ram);
-
-    // printf("v[2] before : %02X\n", registers.v[0x02]);
-    // execute_7(0x02, 0x22, &registers);
-    // printf("v[2] after : %02X\n", registers.v[0x02]);
-
 }
