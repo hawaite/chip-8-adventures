@@ -132,17 +132,20 @@ void execute_d(uint8_t x, uint8_t y, uint8_t n, REGISTERS* registers, uint8_t* r
     blit_sprite(sprite, n, x_val, y_val, registers, framebuffer);
 
     // print the whole framebuffer
+    printf("------------------------------------------------------------------\n");
     for(int fb_y = 0; fb_y < FB_H; fb_y++){
+        printf("|");
         for(int fb_x=0; fb_x < FB_W; fb_x++){
             if(*(framebuffer + (fb_y * FB_W) + fb_x) == 1){
-                printf("#");
+                printf("O");
             }
             else{
-                printf("-");
+                printf(" ");
             }
         }
-        printf("\n");
+        printf("|\n");
     }
+    printf("------------------------------------------------------------------\n");
 }
 
 void execute_e(uint8_t x, REGISTERS* registers){
